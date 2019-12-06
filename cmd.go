@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"os/exec"
 	"time"
 
@@ -11,9 +12,9 @@ import (
 func main() {
 	current := console.Current()
 	defer current.Reset()
-        if err := current.SetRaw(); err != nil {
-                panic(err)
-        }
+	if err := current.SetRaw(); err != nil {
+		panic(err)
+	}
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Minute)
 	var cmd *exec.Cmd = exec.CommandContext(ctx, "htop")
@@ -21,5 +22,5 @@ func main() {
 	cmd.Stdout = current
 	cmd.Stderr = current
 
-	cmd.Run()
+	log.Println(cmd.Run())
 }
