@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	ln, err := net.Listen("tcp", "0.0.0.0:12345")
+	ln, err := net.Listen("tcp", ":12345")
 	if err != nil {
 		panic(err)
 	}
@@ -26,23 +26,23 @@ func main() {
 func handle(c net.Conn) {
 	defer c.Close()
 	/*
-	f, err := c.(*net.TCPConn).File()
-	if err != nil {
-		log.Println(err)
-	}
-	defer func(){
-		c.Close()
-		f.Close()
-		// log.Println("c.Close()")
-		// log.Println("f.Close()")
-	}()
-	log.Println(f.Name())
-	
-	state, _ := term.Attr(f)
-	state.Raw()
-	if err := state.Set(f); err != nil {
-		log.Println(err)
-	}*/
+		f, err := c.(*net.TCPConn).File()
+		if err != nil {
+			log.Println(err)
+		}
+		defer func(){
+			c.Close()
+			f.Close()
+			// log.Println("c.Close()")
+			// log.Println("f.Close()")
+		}()
+		log.Println(f.Name())
+
+		state, _ := term.Attr(f)
+		state.Raw()
+		if err := state.Set(f); err != nil {
+			log.Println(err)
+		}*/
 	pty, _ := term.OpenPTY()
 
 	go io.Copy(c, pty.Master)

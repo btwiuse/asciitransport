@@ -23,7 +23,7 @@ func main() {
 		panic(err)
 	}
 
-	conn, err := net.Dial("tcp", "vm2.k0s.io:12345")
+	conn, err := net.Dial("tcp", ":12345")
 	if err != nil {
 		panic(err)
 	}
