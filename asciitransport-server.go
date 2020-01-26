@@ -3,17 +3,29 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/btwiuse/consoled/asciitransport"
 	"github.com/containerd/console"
 )
 
 func handle(conn net.Conn) {
-	server := asciitransport.Server(conn)
+	logname := fmt.Sprintf("AT-server-%s.log", time.Now().Format("20060102-150405"))
+	log.Println("writing to", logname)
+	logfile, err := os.Create(logname)
+	if err != nil {
+		panic(err)
+	}
+	opts := []asciitransport.Opt{
+		asciitransport.WithLogger(logfile),
+	}
+	server := asciitransport.Server(conn, opts...)
 	term, name, _ := console.NewPty()
 	log.Println("running bash with tty", name)
 
@@ -68,7 +80,9 @@ func handle(conn net.Conn) {
 }
 
 func main() {
-	ln, err := net.Listen("tcp", ":12345")
+	port := ":12345"
+	log.Println("listening on", port)
+	ln, err := net.Listen("tcp", port)
 	if err != nil {
 		panic(err)
 	}

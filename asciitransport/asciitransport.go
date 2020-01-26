@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -32,13 +31,12 @@ type AsciiTransportServer interface {
 	Close()
 }
 
-func Client(conn net.Conn) AsciiTransportClient {
+func Client(conn net.Conn, opts ...Opt) AsciiTransportClient {
 	at := &AsciiTransport{
 		conn:      conn,
 		quit:      make(chan struct{}),
 		closeonce: &sync.Once{},
 		start:     time.Now(),
-		logger:    log.New(os.Stderr, "AT-client", 0),
 		iech:      make(chan *InputEvent),
 		oech:      make(chan *OutputEvent),
 		rech:      make(chan *ResizeEvent),
@@ -51,16 +49,26 @@ func Client(conn net.Conn) AsciiTransportClient {
 	}()
 	at.goReadConn(pr)
 	at.goWriteConn(conn)
+	for _, opt := range opts {
+		opt(at)
+	}
 	return at
 }
 
-func Server(conn net.Conn) AsciiTransportServer {
+type Opt func(at *AsciiTransport)
+
+func WithLogger(w io.WriteCloser) Opt {
+	return func(at *AsciiTransport) {
+		at.logger = NewLogger(w)
+	}
+}
+
+func Server(conn net.Conn, opts ...Opt) AsciiTransportServer {
 	at := &AsciiTransport{
 		conn:      conn,
 		quit:      make(chan struct{}),
 		closeonce: &sync.Once{},
 		start:     time.Now(),
-		logger:    log.New(os.Stderr, "AT-server", 0),
 		iech:      make(chan *InputEvent),
 		oech:      make(chan *OutputEvent),
 		rech:      make(chan *ResizeEvent),
@@ -73,6 +81,9 @@ func Server(conn net.Conn) AsciiTransportServer {
 	}()
 	at.goReadConn(pr)
 	at.goWriteConn(conn)
+	for _, opt := range opts {
+		opt(at)
+	}
 	return at
 }
 
@@ -81,7 +92,7 @@ type AsciiTransport struct {
 	quit      chan struct{}
 	closeonce *sync.Once
 	start     time.Time
-	logger    *log.Logger
+	logger    Logger
 	iech      chan *InputEvent
 	oech      chan *OutputEvent
 	rech      chan *ResizeEvent
@@ -139,7 +150,7 @@ func (c *AsciiTransport) goReadConn(r io.Reader) {
 					// consumed by reading <-AsciiTransportServer.OutputEvent()
 					c.iech <- ie
 					ie.Time = time.Since(c.start).Seconds()
-					c.logger.Print(ie)
+					c.log(ie)
 				case "o":
 					var (
 						oe = (*OutputEvent)(e)
@@ -148,7 +159,7 @@ func (c *AsciiTransport) goReadConn(r io.Reader) {
 					// consumed by reading <-AsciiTransportClient.OutputEvent()
 					c.oech <- oe
 					oe.Time = time.Since(c.start).Seconds()
-					c.logger.Print(oe)
+					c.log(oe)
 				default:
 					log.Println("unknown message:", e)
 				}
@@ -166,7 +177,7 @@ func (c *AsciiTransport) goReadConn(r io.Reader) {
 				// consumed by reading <-AsciiTransportServer.ResizeEvent()
 				c.rech <- re
 				re.Timestamp = uint(time.Now().Unix())
-				c.logger.Print(re)
+				c.log(re)
 			}
 		}
 	}()
@@ -186,7 +197,7 @@ func (c *AsciiTransport) goWriteConn(w io.Writer) {
 					break
 				}
 				ie.Time = time.Since(c.start).Seconds()
-				c.logger.Print(ie)
+				c.log(ie)
 			}
 			c.Close()
 		}
@@ -202,7 +213,7 @@ func (c *AsciiTransport) goWriteConn(w io.Writer) {
 					break
 				}
 				re.Timestamp = uint(time.Now().Unix())
-				c.logger.Print(re)
+				c.log(re)
 			}
 			c.Close()
 		}
@@ -218,7 +229,7 @@ func (c *AsciiTransport) goWriteConn(w io.Writer) {
 					break
 				}
 				oe.Time = time.Since(c.start).Seconds()
-				c.logger.Print(oe)
+				c.log(oe)
 			}
 			c.Close()
 		}
@@ -239,7 +250,36 @@ func (c *AsciiTransport) Close() {
 	c.closeonce.Do(func() {
 		close(c.quit)
 		c.conn.Close()
+		if c.logger != nil {
+			c.logger.Close()
+		}
 	})
+}
+
+type Logger interface {
+	Print(v interface{})
+	Close() error
+}
+
+func NewLogger(w io.WriteCloser) Logger {
+	l := &logger{
+		l: log.New(w, "", 0),
+		w: w,
+	}
+	return l
+}
+
+type logger struct {
+	l *log.Logger
+	w io.WriteCloser
+}
+
+func (l *logger) Print(v interface{}) {
+	l.l.Print(v)
+}
+
+func (l *logger) Close() error {
+	return l.w.Close()
 }
 
 func (c *AsciiTransport) Done() <-chan struct{} {
@@ -273,8 +313,15 @@ func (c *AsciiTransport) Output(buf []byte) {
 
 func (c *AsciiTransport) Resize(height, width uint) {
 	ie := &ResizeEvent{
-		Width:  width,
-		Height: height,
+		Version: 2,
+		Width:   width,
+		Height:  height,
 	}
 	c.rech <- ie
+}
+
+func (c *AsciiTransport) log(v interface{}) {
+	if c.logger != nil {
+		c.logger.Print(v)
+	}
 }
