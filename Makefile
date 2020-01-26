@@ -1,5 +1,5 @@
 client:
-	go run examples/asciitransport-client.go
+	@ go run examples/asciitransport-client.go
 
 server:
-	go run examples/asciitransport-server.go
+	@ go run examples/asciitransport-server.go

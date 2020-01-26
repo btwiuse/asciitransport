@@ -9,6 +9,7 @@ import (
 type AsciiTransportClient interface {
 	OutputEvent() <-chan *OutputEvent
 	Input([]byte)
+	InputFrom(io.Reader) error
 	Resize(uint, uint)
 	Done() <-chan struct{}
 	Close()
@@ -25,6 +26,9 @@ func Client(conn io.ReadWriteCloser, opts ...Opt) AsciiTransportClient {
 		rech:      make(chan *ResizeEvent),
 		isClient:  true,
 	}
+	for _, opt := range opts {
+		opt(at)
+	}
 	pr, pw := io.Pipe()
 	go func() {
 		io.Copy(pw, conn)
@@ -32,8 +36,5 @@ func Client(conn io.ReadWriteCloser, opts ...Opt) AsciiTransportClient {
 	}()
 	at.goReadConn(pr)
 	at.goWriteConn(conn)
-	for _, opt := range opts {
-		opt(at)
-	}
 	return at
 }

@@ -23,6 +23,9 @@ type AsciiTransport struct {
 	oech      chan *OutputEvent
 	rech      chan *ResizeEvent
 	isClient  bool
+	reader    io.Reader
+	writer    io.Writer
+	resizer   Resizer
 }
 
 func (c *AsciiTransport) OutputEvent() <-chan *OutputEvent { return c.oech }
@@ -56,6 +59,30 @@ func (c *AsciiTransport) Input(buf []byte) {
 	}
 
 	c.iech <- ie
+}
+
+func (c *AsciiTransport) InputFrom(r io.Reader) error {
+	// make([]byte, 0, 4096) causes 0 return
+	for buf := make([]byte, 4096); ; {
+		n, err := r.Read(buf)
+		if err != nil {
+			return err
+		}
+		c.Input(buf[:n])
+	}
+	return nil
+}
+
+func (c *AsciiTransport) OutputFrom(r io.Reader) error {
+	// make([]byte, 0, 4096) causes 0 return
+	for buf := make([]byte, 4096); ; {
+		n, err := r.Read(buf)
+		if err != nil {
+			return err
+		}
+		c.Output(buf[:n])
+	}
+	return nil
 }
 
 func (c *AsciiTransport) Output(buf []byte) {
@@ -196,7 +223,59 @@ func (c *AsciiTransport) goWriteConn(w io.Writer) {
 	if c.isClient {
 		go clientInput2Server()
 		go clientResize2Server()
+		if c.reader != nil {
+			go func() {
+				for buf := make([]byte, 4096); ; {
+					n, err := c.reader.Read(buf)
+					if err != nil {
+						log.Println(err)
+						break
+					}
+					c.Input(buf[:n])
+				}
+				c.Close()
+			}()
+		}
+		if c.writer != nil {
+			go func() {
+				for {
+					oe := <-c.OutputEvent()
+					_, err := io.Copy(c.writer, strings.NewReader(oe.Data))
+					if err != nil {
+						log.Println(err)
+						break
+					}
+				}
+				c.Close()
+			}()
+		}
 	} else {
 		go serverOutput2Client()
+		if c.reader != nil {
+			go func() {
+				for buf := make([]byte, 4096); ; {
+					n, err := c.reader.Read(buf)
+					if err != nil {
+						log.Println(err)
+						break
+					}
+					c.Output(buf[:n])
+				}
+				c.Close()
+			}()
+		}
+		if c.writer != nil {
+			go func() {
+				for {
+					ie := <-c.InputEvent()
+					_, err := io.Copy(c.writer, strings.NewReader(ie.Data))
+					if err != nil {
+						log.Println(err)
+						break
+					}
+				}
+				c.Close()
+			}()
+		}
 	}
 }

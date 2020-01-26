@@ -3,14 +3,11 @@
 package main
 
 import (
-	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
 	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -19,7 +16,7 @@ import (
 )
 
 func main() {
-	fmt.Println("Press ESC twice to exit.")
+	log.Println("Press ESC twice to exit.")
 
 	var (
 		conn net.Conn
@@ -44,39 +41,12 @@ func main() {
 		panic(err)
 	}
 
-	client := asciitransport.Client(conn)
-
-	// send
-	// i
-	go func() {
-		// make([]byte, 0, 4096) causes 0 return
-		for buf := make([]byte, 4096); ; {
-			n, err := os.Stdin.Read(buf)
-			if err != nil {
-				log.Println(err)
-				break
-			}
-			// log.Println(n)
-			// time.Sleep(time.Second)
-			client.Input(buf[:n])
-		}
-		exit()
-	}()
-
-	// recv
-	// o
-	go func() {
-		for {
-			oe := <-client.OutputEvent()
-			continue // discard
-			_, err := io.Copy(os.Stdout, strings.NewReader(oe.Data))
-			if err != nil {
-				log.Println(err)
-				break
-			}
-		}
-		exit()
-	}()
+	opts := []asciitransport.Opt{
+		asciitransport.WithLogger(os.Stdout),
+		asciitransport.WithReader(os.Stdin),
+		// asciitransport.WithWriter(os.Stdout),
+	}
+	client := asciitransport.Client(conn, opts...)
 
 	// send
 	// r

@@ -4,11 +4,9 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/btwiuse/asciitransport"
@@ -22,42 +20,16 @@ func handle(conn net.Conn) {
 	if err != nil {
 		panic(err)
 	}
-	opts := []asciitransport.Opt{
-		asciitransport.WithLogger(logfile),
-	}
-	server := asciitransport.Server(conn, opts...)
+
 	term, name, _ := console.NewPty()
 	log.Println("running bash with tty", name)
 
-	// send
-	// o
-	go func() {
-		// make([]byte, 0, 4096) causes 0 return
-		for buf := make([]byte, 4096); ; {
-			n, err := term.Read(buf)
-			if err != nil {
-				log.Println(err)
-				break
-			}
-			// log.Println(string(buf[:n]))
-			server.Output(buf[:n])
-		}
-		server.Close()
-	}()
-
-	// recv
-	// i
-	go func() {
-		for {
-			ie := <-server.InputEvent()
-			_, err := io.Copy(term, strings.NewReader(ie.Data))
-			if err != nil {
-				log.Println(err)
-				break
-			}
-		}
-		server.Close()
-	}()
+	opts := []asciitransport.Opt{
+		asciitransport.WithLogger(logfile),
+		asciitransport.WithReader(term),
+		asciitransport.WithWriter(term),
+	}
+	server := asciitransport.Server(conn, opts...)
 
 	go func() {
 		for {
