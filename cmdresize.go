@@ -41,7 +41,7 @@ func main() {
 	go io.Copy(pty, current)
 	go io.Copy(current, pty)
 
-	go func(){
+	go func() {
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, syscall.SIGWINCH)
 		for {
@@ -57,5 +57,5 @@ func main() {
 		}
 	}()
 
-	cmd.Run()
+	log.Println(cmd.Run())
 }
