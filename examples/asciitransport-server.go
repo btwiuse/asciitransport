@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/btwiuse/consoled/asciitransport"
+	"github.com/btwiuse/asciitransport"
 	"github.com/containerd/console"
 )
 

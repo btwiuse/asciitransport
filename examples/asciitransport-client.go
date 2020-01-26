@@ -14,22 +14,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/btwiuse/consoled/asciitransport"
+	"github.com/btwiuse/asciitransport"
 	"github.com/containerd/console"
 )
 
 func main() {
 	fmt.Println("Press ESC twice to exit.")
-	term, err := console.ConsoleFromFile(os.Stdin)
-	if err != nil {
-		panic(err)
-	}
 
-	if err := term.SetRaw(); err != nil {
-		panic(err)
-	}
-
-	var conn net.Conn
+	var (
+		conn net.Conn
+		err  error
+	)
 	for {
 		conn, err = net.Dial("tcp", ":12345")
 		if err != nil {
@@ -38,6 +33,15 @@ func main() {
 			continue
 		}
 		break
+	}
+
+	term, err := console.ConsoleFromFile(os.Stdin)
+	if err != nil {
+		panic(err)
+	}
+
+	if err = term.SetRaw(); err != nil {
+		panic(err)
 	}
 
 	client := asciitransport.Client(conn)
