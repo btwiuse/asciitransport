@@ -8,10 +8,12 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
 
+	"github.com/btwiuse/consoled/asciitransport"
 	"github.com/containerd/console"
 )
 
@@ -31,7 +33,7 @@ func main() {
 		panic(err)
 	}
 
-	client := Client(conn)
+	client := asciitransport.Client(conn)
 
 	// send
 	// i
@@ -85,4 +87,9 @@ func main() {
 			)
 		}
 	}
+}
+
+func exit() {
+	exec.Command("reset").Run()
+	os.Exit(1)
 }

@@ -6,13 +6,16 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
+	"os/exec"
 	"strings"
 
+	"github.com/btwiuse/consoled/asciitransport"
 	"github.com/containerd/console"
 )
 
 func handle(conn net.Conn) {
-	server := Server(conn)
+	server := asciitransport.Server(conn)
 	term, name, _ := console.NewPty()
 	log.Println("running bash with tty", name)
 
@@ -77,4 +80,9 @@ func main() {
 		}
 		go handle(conn)
 	}
+}
+
+func exit() {
+	exec.Command("reset").Run()
+	os.Exit(1)
 }
