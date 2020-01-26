@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -75,9 +74,4 @@ func main() {
 
 	<-client.Done()
 	term.Reset()
-}
-
-func exit() {
-	exec.Command("reset").Run()
-	os.Exit(1)
 }
