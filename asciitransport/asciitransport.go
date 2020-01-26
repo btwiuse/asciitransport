@@ -133,20 +133,22 @@ func (c *AsciiTransport) goReadConn(r io.Reader) {
 				switch e.Type {
 				case "i":
 					var (
-						ie  = (*InputEvent)(e)
-						str = ie.String()
+						ie = (*InputEvent)(e)
+						// str = ie.String()
 					)
-					c.logger.Print(str)
 					// consumed by reading <-AsciiTransportServer.OutputEvent()
 					c.iech <- ie
+					ie.Time = time.Since(c.start).Seconds()
+					c.logger.Print(ie)
 				case "o":
 					var (
-						oe  = (*OutputEvent)(e)
-						str = oe.String()
+						oe = (*OutputEvent)(e)
+						// str = oe.String()
 					)
-					c.logger.Print(str)
 					// consumed by reading <-AsciiTransportClient.OutputEvent()
 					c.oech <- oe
+					oe.Time = time.Since(c.start).Seconds()
+					c.logger.Print(oe)
 				default:
 					log.Println("unknown message:", e)
 				}
@@ -160,12 +162,11 @@ func (c *AsciiTransport) goReadConn(r io.Reader) {
 					log.Println(err)
 					continue
 				}
-				var (
-					str = re.String()
-				)
-				c.logger.Print(str)
+				// var ( str = re.String() )
 				// consumed by reading <-AsciiTransportServer.ResizeEvent()
 				c.rech <- re
+				re.Timestamp = uint(time.Now().Unix())
+				c.logger.Print(re)
 			}
 		}
 	}()
@@ -179,12 +180,13 @@ func (c *AsciiTransport) goWriteConn(w io.Writer) {
 					ie  = <-c.iech
 					str = ie.String()
 				)
-				c.logger.Print(str)
 				_, err := io.Copy(w, strings.NewReader(str))
 				if err != nil {
 					log.Println(err)
 					break
 				}
+				ie.Time = time.Since(c.start).Seconds()
+				c.logger.Print(ie)
 			}
 			c.Close()
 		}
@@ -194,12 +196,13 @@ func (c *AsciiTransport) goWriteConn(w io.Writer) {
 					re  = <-c.rech
 					str = re.String()
 				)
-				c.logger.Print(str)
 				_, err := io.Copy(w, strings.NewReader(str))
 				if err != nil {
 					log.Println(err)
 					break
 				}
+				re.Timestamp = uint(time.Now().Unix())
+				c.logger.Print(re)
 			}
 			c.Close()
 		}
@@ -209,12 +212,13 @@ func (c *AsciiTransport) goWriteConn(w io.Writer) {
 					oe  = <-c.oech
 					str = oe.String()
 				)
-				c.logger.Print(str)
 				_, err := io.Copy(w, strings.NewReader(str))
 				if err != nil {
 					log.Println(err)
 					break
 				}
+				oe.Time = time.Since(c.start).Seconds()
+				c.logger.Print(oe)
 			}
 			c.Close()
 		}
