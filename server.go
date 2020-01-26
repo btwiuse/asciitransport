@@ -2,7 +2,6 @@ package asciitransport
 
 import (
 	"io"
-	"net"
 	"sync"
 	"time"
 )
@@ -15,7 +14,7 @@ type AsciiTransportServer interface {
 	Close()
 }
 
-func Server(conn net.Conn, opts ...Opt) AsciiTransportServer {
+func Server(conn io.ReadWriteCloser, opts ...Opt) AsciiTransportServer {
 	at := &AsciiTransport{
 		conn:      conn,
 		quit:      make(chan struct{}),

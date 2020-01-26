@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +14,7 @@ import (
 type Opt func(at *AsciiTransport)
 
 type AsciiTransport struct {
-	conn      net.Conn
+	conn      io.ReadWriteCloser
 	quit      chan struct{}
 	closeonce *sync.Once
 	start     time.Time
