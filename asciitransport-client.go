@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/btwiuse/consoled/asciitransport"
 	"github.com/containerd/console"
@@ -28,9 +29,15 @@ func main() {
 		panic(err)
 	}
 
-	conn, err := net.Dial("tcp", ":12345")
-	if err != nil {
-		panic(err)
+	var conn net.Conn
+	for {
+		conn, err = net.Dial("tcp", ":12345")
+		if err != nil {
+			log.Println(err)
+			time.Sleep(time.Second)
+			continue
+		}
+		break
 	}
 
 	client := asciitransport.Client(conn)
@@ -69,11 +76,11 @@ func main() {
 
 	// send
 	// r
-	sig := make(chan os.Signal)
-	signal.Notify(sig, syscall.SIGWINCH)
-	for {
-		switch <-sig {
-		case syscall.SIGWINCH:
+	go func() {
+		sig := make(chan os.Signal)
+		signal.Notify(sig, syscall.SIGWINCH)
+
+		for {
 			currentSize, err := term.Size()
 			if err != nil {
 				log.Println(err)
@@ -85,8 +92,15 @@ func main() {
 				uint(currentSize.Height),
 				uint(currentSize.Width),
 			)
+
+			switch <-sig {
+			case syscall.SIGWINCH:
+			}
 		}
-	}
+	}()
+
+	<-client.Done()
+	term.Reset()
 }
 
 func exit() {

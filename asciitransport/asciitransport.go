@@ -8,8 +8,8 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/btwiuse/pretty"
@@ -20,52 +20,72 @@ type AsciiTransportClient interface {
 	OutputEvent() <-chan *OutputEvent
 	Input([]byte)
 	Resize(uint, uint)
+	Done() <-chan struct{}
+	Close()
 }
 
 type AsciiTransportServer interface {
 	ResizeEvent() <-chan *ResizeEvent
 	InputEvent() <-chan *InputEvent
 	Output([]byte)
+	Done() <-chan struct{}
+	Close()
 }
 
 func Client(conn net.Conn) AsciiTransportClient {
 	at := &AsciiTransport{
-		conn:     conn,
-		start:    time.Now(),
-		logger:   log.New(os.Stderr, "AT-client", 0),
-		iech:     make(chan *InputEvent),
-		oech:     make(chan *OutputEvent),
-		rech:     make(chan *ResizeEvent),
-		isClient: true,
+		conn:      conn,
+		quit:      make(chan struct{}),
+		closeonce: &sync.Once{},
+		start:     time.Now(),
+		logger:    log.New(os.Stderr, "AT-client", 0),
+		iech:      make(chan *InputEvent),
+		oech:      make(chan *OutputEvent),
+		rech:      make(chan *ResizeEvent),
+		isClient:  true,
 	}
-	at.goReadConn()
-	at.goWriteConn()
+	pr, pw := io.Pipe()
+	go func() {
+		io.Copy(pw, conn)
+		at.Close()
+	}()
+	at.goReadConn(pr)
+	at.goWriteConn(conn)
 	return at
 }
 
 func Server(conn net.Conn) AsciiTransportServer {
 	at := &AsciiTransport{
-		conn:     conn,
-		start:    time.Now(),
-		logger:   log.New(os.Stderr, "AT-server", 0),
-		iech:     make(chan *InputEvent),
-		oech:     make(chan *OutputEvent),
-		rech:     make(chan *ResizeEvent),
-		isClient: false,
+		conn:      conn,
+		quit:      make(chan struct{}),
+		closeonce: &sync.Once{},
+		start:     time.Now(),
+		logger:    log.New(os.Stderr, "AT-server", 0),
+		iech:      make(chan *InputEvent),
+		oech:      make(chan *OutputEvent),
+		rech:      make(chan *ResizeEvent),
+		isClient:  false,
 	}
-	at.goReadConn()
-	at.goWriteConn()
+	pr, pw := io.Pipe()
+	go func() {
+		io.Copy(pw, conn)
+		at.Close()
+	}()
+	at.goReadConn(pr)
+	at.goWriteConn(conn)
 	return at
 }
 
 type AsciiTransport struct {
-	conn     net.Conn
-	start    time.Time
-	logger   *log.Logger
-	iech     chan *InputEvent
-	oech     chan *OutputEvent
-	rech     chan *ResizeEvent
-	isClient bool
+	conn      net.Conn
+	quit      chan struct{}
+	closeonce *sync.Once
+	start     time.Time
+	logger    *log.Logger
+	iech      chan *InputEvent
+	oech      chan *OutputEvent
+	rech      chan *ResizeEvent
+	isClient  bool
 }
 
 type ResizeEvent cast.Header
@@ -93,9 +113,9 @@ func (e *OutputEvent) String() string {
 	return pretty.JsonString([]interface{}{&e.Time, &e.Type, &e.Data})
 }
 
-func (c *AsciiTransport) goReadConn() {
+func (c *AsciiTransport) goReadConn(r io.Reader) {
 	go func() {
-		scanner := bufio.NewScanner(c.conn)
+		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			var (
 				buf  = scanner.Bytes()
@@ -151,7 +171,7 @@ func (c *AsciiTransport) goReadConn() {
 	}()
 }
 
-func (c *AsciiTransport) goWriteConn() {
+func (c *AsciiTransport) goWriteConn(w io.Writer) {
 	var (
 		clientInput2Server = func() {
 			for {
@@ -160,13 +180,13 @@ func (c *AsciiTransport) goWriteConn() {
 					str = ie.String()
 				)
 				c.logger.Print(str)
-				_, err := io.Copy(c.conn, strings.NewReader(str))
+				_, err := io.Copy(w, strings.NewReader(str))
 				if err != nil {
 					log.Println(err)
 					break
 				}
 			}
-			exit()
+			c.Close()
 		}
 		clientResize2Server = func() {
 			for {
@@ -175,13 +195,13 @@ func (c *AsciiTransport) goWriteConn() {
 					str = re.String()
 				)
 				c.logger.Print(str)
-				_, err := io.Copy(c.conn, strings.NewReader(str))
+				_, err := io.Copy(w, strings.NewReader(str))
 				if err != nil {
 					log.Println(err)
 					break
 				}
 			}
-			exit()
+			c.Close()
 		}
 		serverOutput2Client = func() {
 			for {
@@ -190,13 +210,13 @@ func (c *AsciiTransport) goWriteConn() {
 					str = oe.String()
 				)
 				c.logger.Print(str)
-				_, err := io.Copy(c.conn, strings.NewReader(str))
+				_, err := io.Copy(w, strings.NewReader(str))
 				if err != nil {
 					log.Println(err)
 					break
 				}
 			}
-			exit()
+			c.Close()
 		}
 	)
 	if c.isClient {
@@ -211,6 +231,17 @@ func (c *AsciiTransport) OutputEvent() <-chan *OutputEvent { return c.oech }
 func (s *AsciiTransport) InputEvent() <-chan *InputEvent   { return s.iech }
 func (s *AsciiTransport) ResizeEvent() <-chan *ResizeEvent { return s.rech }
 
+func (c *AsciiTransport) Close() {
+	c.closeonce.Do(func() {
+		close(c.quit)
+		c.conn.Close()
+	})
+}
+
+func (c *AsciiTransport) Done() <-chan struct{} {
+	return c.quit
+}
+
 func (c *AsciiTransport) Input(buf []byte) {
 	var (
 		str = string(buf)
@@ -218,8 +249,9 @@ func (c *AsciiTransport) Input(buf []byte) {
 		ie  = (*InputEvent)(e)
 	)
 
+	// local debug helper
 	if fmt.Sprintf("%q", str) == `"\x1b\x1b"` {
-		exit()
+		c.Close()
 	}
 
 	c.iech <- ie
@@ -241,9 +273,4 @@ func (c *AsciiTransport) Resize(height, width uint) {
 		Height: height,
 	}
 	c.rech <- ie
-}
-
-func exit() {
-	exec.Command("reset").Run()
-	os.Exit(1)
 }

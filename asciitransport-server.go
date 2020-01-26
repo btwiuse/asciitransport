@@ -6,8 +6,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/btwiuse/consoled/asciitransport"
@@ -32,7 +30,7 @@ func handle(conn net.Conn) {
 			// log.Println(string(buf[:n]))
 			server.Output(buf[:n])
 		}
-		exit()
+		server.Close()
 	}()
 
 	// recv
@@ -46,7 +44,7 @@ func handle(conn net.Conn) {
 				break
 			}
 		}
-		exit()
+		server.Close()
 	}()
 
 	go func() {
@@ -62,8 +60,11 @@ func handle(conn net.Conn) {
 				break
 			}
 		}
-		exit()
+		server.Close()
 	}()
+
+	<-server.Done()
+	log.Println(name, "detached", term.Close())
 }
 
 func main() {
@@ -80,9 +81,4 @@ func main() {
 		}
 		go handle(conn)
 	}
-}
-
-func exit() {
-	exec.Command("reset").Run()
-	os.Exit(1)
 }
