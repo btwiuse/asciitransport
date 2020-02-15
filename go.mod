@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/btwiuse/pretty v0.0.0-20190401073227-519ff4ea1882
-	github.com/btwiuse/wetty v0.0.24
+	github.com/btwiuse/wetty v0.0.30-0.20200215105037-750dff26ae42 // indirect
 	github.com/cirocosta/asciinema-edit v0.0.0-20190130154215-1c0971ae232a
 	github.com/containerd/console v0.0.0-20191219165238-8375c3424e4d
 	github.com/creack/pty v1.1.9
